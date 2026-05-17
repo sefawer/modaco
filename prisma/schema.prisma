@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Product {
+  id                  String     @id @default(uuid())
+  name                String
+  category            String
+  sku                 String     @unique
+  base_price          Float
+  stock_quantity      Int
+  created_at          DateTime   @default(now())
+  updated_at          DateTime   @updatedAt
+
+  @@index([category])
+}
+
+model Promotion {
+  id            String         @id @default(uuid())
+  name          String
+  discount_type DiscountType
+  value         Float
+  start_date    DateTime
+  end_date      DateTime
+  target_type   TargetType
+  target_id     String         // Can be Product ID or Category Name
+  created_at    DateTime       @default(now())
+  updated_at    DateTime       @updatedAt
+
+  @@index([target_type, target_id])
+  @@index([start_date, end_date])
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum TargetType {
+  PRODUCT
+  CATEGORY
+}

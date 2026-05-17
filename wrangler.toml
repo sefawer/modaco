@@ -1,0 +1,25 @@
+name = "modaco-ingestion-worker"
+main = "src/functions/ingest-products-worker.ts"
+compatibility_date = "2024-04-03"
+compatibility_flags = [ "nodejs_compat" ]
+
+# Bindings for Cloudflare Queues Producer
+[[queues.producers]]
+queue = "product-ingestion"
+binding = "PRODUCT_INGESTION_QUEUE"
+
+# Trigger for Cloudflare Queues Consumer
+[[queues.consumers]]
+queue = "product-ingestion"
+max_batch_size = 10
+max_batch_timeout = 5 # seconds
+
+# Bindings for Hyperdrive (PostgreSQL connection pooler)
+# Update this with your actual Hyperdrive ID after creating it: `npx wrangler hyperdrive create <name> --connection-string="..."`
+# [[hyperdrive]]
+# binding = "HYPERDRIVE"
+# id = "your-hyperdrive-id"
+
+[vars]
+# Direct database URL fallback (or you can use Secrets for production: `npx wrangler secret put DATABASE_URL`)
+DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/modaco"
