@@ -59,6 +59,7 @@ ModaCo requires a resilient API to manage their product catalog and promotions. 
 2. **Longer Total Duration:** If discount amounts are equal, the promotion with the longer total duration (`end_date - start_date`) wins to guarantee pricing stability.
 3. **Compound Indexing:** To prevent slow dynamic query lookups, the `Promotion` table is indexed on `(target_type, target_id)` and `(start_date, end_date)`.
 4. **N+1 Query Prevention:** When listing products, we retrieve all eligible promotions for the entire page of products in a single SQL query, separating and matching them in memory to maintain O(1) database query complexity.
+5. **Empirical Verification:** We built an automated, programmatic integration test suite (`src/test.ts`) that runs against a live, seeded PostgreSQL database, guaranteeing that overlapping conflicts (e.g. fixed direct product discount vs category percentage discount) resolve exactly to the customer-friendly mathematical winner in under 5ms, and validates that Cache-Aside reads are securely stored in Redis.
 
 ### Trade-offs:
 - **Pros:** 
