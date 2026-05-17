@@ -67,10 +67,17 @@ docker compose exec api npx prisma db push
 We've included an automated seeder to simulate realistic overlapping category-level (10% off) and product-level ($15 off) promotion conflicts:
 ```bash
 # Seed the database inside the container
-docker compose exec api node seed-db.js
+docker compose exec api npm run seed
 ```
 
-### 4. Test REST Endpoints
+### 4. Running Integration Tests
+To execute the automated test suite verifying dynamic promotion resolution priority rules and Cache-Aside lookup integrity:
+```bash
+# Run the automated test suite
+docker compose exec api npm run test
+```
+
+### 5. Test REST Endpoints
 ```bash
 # Health check
 curl http://localhost:3000/health
