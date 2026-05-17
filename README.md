@@ -21,7 +21,7 @@ graph TD
 
     %% Scenario B: Core Backend %%
     subgraph Express_Backend [Scenario B: Core Express Backend]
-        UserRequest[Client GET /products] -->|O(1) Cache Lookup| CacheRedis{Redis Cache}
+        UserRequest[Client GET /products] -->|O-1 Cache Lookup| CacheRedis{Redis Cache}
         CacheRedis -->|Hit| ReturnCache[Return Product Catalog]
         CacheRedis -->|Miss| PostgresDB[(PostgreSQL Database)]
         PostgresDB -->|Dynamic Promotion Resolution| CalculatePrices[Calculate Effective Price]
