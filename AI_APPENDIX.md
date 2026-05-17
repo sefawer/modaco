@@ -13,24 +13,23 @@ After setting up the foundation (Docker for Postgres/Redis, Prisma schema, serve
 **Limitations & Challenges Handled:**
 
 1. **Prisma 7 Query Engine & Driver Adapter Mismatch:**
-   - *Challenge:* When utilizing Prisma v7, the native Rust binary query engines are removed, requiring Pg driver adapters (`@prisma/adapter-pg`) and connection pools to instantiate the database client. Initially, passing `DATABASE_URL` directly into `schema.prisma` was rejected.
-   - *Resolution:* Moved database connection pooling logic out of the schema into `prisma.config.ts` and set up Pg connection adapters in `src/config/prisma.ts` to seamlessly manage pooled Postgres execution inside docker containers.
+   - *Challenge:* In Prisma v7, native Rust binary query engines are removed, requiring active PostgreSQL Pg driver adapters (`@prisma/adapter-pg`) and connection pools. Initially, passing `DATABASE_URL` directly into `schema.prisma` failed in local and alpine environments.
+   - *Resolution:* Extracted connection string parameters into `prisma.config.ts` and set up the Pg adapter inside `src/config/prisma.ts` to cleanly bridge the client inside Docker.
 
-2. **Serverless Streaming Data Ingestion (Scenario A):**
-   - *Challenge:* The standard model approach was a single generic bulk payload insert, which violates RAM and Execution timeout bounds in serverless functions (like Cloudflare Workers / Azure Functions).
-   - *Resolution:* Configured the pipeline to parse files on the fly via `csv-parser` web streams, piping batched chunks (500 records) into message queue segments to distribute and scale consumers with zero flat memory footprints.
+2. **Cloudflare Worker Streaming & Queue Serialization Bug (Scenario A):**
+   - *Challenge:* The Edge Worker successfully processed high-volume CSV streams, but the initial AI-generated queue logic used `PRODUCT_INGESTION_QUEUE.sendBatch(...)` to split and send individual product objects as separate messages. However, the database consumer worker expected a complete array payload (`message.body` as a chunk). This caused a critical runtime `TypeError: chunk is not iterable` crash during ingestion.
+   - *Resolution:* Diagnosed the serialization mismatch. Refactored both the producer chunks and the leftover streams inside `ingest-products-worker.ts` to transmit the entire `currentChunk` array via a single `send()` call, preserving the consumer's high-speed bulk database insertion pipeline.
 
-3. **Dynamic Overlapping Promotion Resolution & Decoupling (Scenario B):**
-   - *Challenge:* Naively assigning an `active_promotion_id` relation directly to the `Product` table limited products to a single concurrent discount. It prevented overlapping category-level and direct flash sale campaigns from existing concurrently.
-   - *Resolution:* Decoupled pricing relations completely. The engine dynamically queries active promotions, applying custom prioritization logic in memory (Highest Discount Amount wins -> Longer Promotion Duration wins). 
-   - *N+1 Prevention:* Prevented massive SQL database access loops by querying all active promotion targets for a page's products in a single SQL operation, resolving mappings in memory to preserve O(1) query complexity.
+3. **Dynamic Overlapping Promotion Engine & N+1 Prevention (Scenario B):**
+   - *Challenge:* A naive database relation mapping would restrict products to a single active promotion (by assigning a static foreign key on `Product`). This blocked category-wide flash sales and specific product-level campaigns from overlapping.
+   - *Resolution:* Completely decoupled the relation. The pricing engine dynamically resolves matching active promotions at query time. To prevent database N+1 performance degradation on bulk lookups, the engine retrieves all matching targets in a single unified SQL query and binds them in-memory (selecting Highest Discount first, and Longest Validity Duration as a tie-breaker).
 
-4. **Docker Network Mismatches & TypeScript node16 Compilation Resolvers:**
-   - *Challenge:* TypeScript verbatim module imports crashed under CommonJS outputs in alpine containers. Additionally, the Express API defaulted to `localhost:6379` for Redis, causing container isolation `ECONNREFUSED` connection crashes.
-   - *Resolution:* Standardized TS configuration under Node16 module resolutions (verbatimModuleSyntax: false) and injected docker service hosts (`REDIS_URL=redis://redis:6379`) to allow seamless inter-container routing.
+4. **Docker Container Resolution & TypeScript node16 ESM/CommonJS Mismatch:**
+   - *Challenge (Critical Environment Blocker):* This was the most critical blocker preventing local execution. The Node 22 alpine container crashed on launch with a `MODULE_NOT_FOUND` error due to TS compilation issues under strict `verbatimModuleSyntax` and CommonJS vs. ESM mismatches. Simultaneously, the Express service failed to connect to Redis (`ECONNREFUSED`), defaulting to `localhost:6379` instead of routing through the Docker network.
+   - *Resolution:* Fixed the compiler pipeline by adjusting `tsconfig.json` to compile into CommonJS using `node16` module resolution (setting `verbatimModuleSyntax` to `false`). Corrected the Redis routing boundary by standardizing environment variables to `REDIS_URL=redis://redis:6379` inside `docker-compose.yml`, successfully uniting all three microservices.
 
 ## 4. Overall Reflection
-- **Estimated Ratio:** 75% AI Generated / 25% Human Steered (Collaborative pairing on resolving strict compiler settings, refactoring Decoupled pricing tables, and container network debugging).
-- **Key Takeaway:** While AI tools excel at accelerating boilerplate creation, database migrations, and structural scaffolding, human oversight is crucial when designing high-throughput overlapping algorithms or troubleshooting environment-specific network topology.
-- **Integration Documentation:** To guarantee successful deployment, we have provided comprehensive step-by-step setup instructions for both local Docker setups and global Cloudflare Worker deployments (Queues, Hyperdrive) in the main [README.md](./README.md) file.
+- **Estimated Ratio:** 70% AI Generated / 30% Human Steered (Collaborative debugging of deep compiler issues, refactoring decoupled DB structures, and identifying the worker's queue serialization bug).
+- **Key Takeaway:** AI is exceptional at rapid prototyping and scaffolding. However, when complex multi-environment architectures are involved (such as a V8 edge sandbox, container networks, and strict ORM version bumps), human architectural steering is absolutely essential to resolve network isolation issues, memory leaks, and serialization mismatches that would otherwise crash in a production environment.
+- **Integration Documentation:** Detailed setup instructions, wrangler queue configurations, Hyperdrive pool settings, and local Docker compose running commands are fully documented in [README.md](./README.md).
 
